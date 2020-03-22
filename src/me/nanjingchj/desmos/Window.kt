@@ -55,9 +55,10 @@ class Window : JFrame("Desmos") {
 
         canvas.initBufferStrategy()
         revalidate()
-
-        functions.add(Function("f(x) = x ^ 2"))
-        functions.add(Function("g(x) = sin(x)"))
+        synchronized(functions) {
+            functions.add(Function("f(x) = x ^ 2"))
+            functions.add(Function("g(x) = sin(x)"))
+        }
     }
 }
 
@@ -69,6 +70,8 @@ data class Point(val x: Double, val y: Double) {
 }
 
 data class Quadruple<T>(val a: T, val b: T, val c: T, val d: T)
+
+private const val zoomIncCoefficient = 0.1
 
 class CanvasView(private val functionList: ArrayList<Function>) : Canvas() {
     // project this whole range of points onto the graph
@@ -94,6 +97,31 @@ class CanvasView(private val functionList: ArrayList<Function>) : Canvas() {
                 bufferStrategy.show()
             }.start()
         }.start()
+
+        addMouseWheelListener {
+            val rangeX = right - left
+            val rangeY = top - bottom
+            val centerX = left + rangeX / 2
+            val centerY = bottom + rangeY / 2
+            val rangeX2 = rangeX / 2
+            val rangeY2 = rangeY / 2
+            val zoomInc = (if (rangeX > rangeY) rangeX else rangeY) * zoomIncCoefficient
+            if (rangeX > 0 && rangeY > 0) {
+                if (it.wheelRotation < 0) {
+                    //println("up")
+                    left = centerX - rangeX2 + zoomInc
+                    right = centerX + rangeX2 - zoomInc
+                    top = centerY + rangeY2 - zoomInc
+                    bottom = centerY - rangeY2 + zoomInc
+                } else {
+                    //println("down")
+                    left = centerX - rangeX2 - zoomInc
+                    right = centerX + rangeX2 + zoomInc
+                    top = centerY + rangeY2 + zoomInc
+                    bottom = centerY - rangeY2 - zoomInc
+                }
+            }
+        }
 
         addMouseMotionListener(object : MouseMotionListener {
             override fun mouseMoved(e: MouseEvent) {
@@ -152,57 +180,64 @@ class CanvasView(private val functionList: ArrayList<Function>) : Canvas() {
         g.color = Color.BLACK
         for (x in left.toInt() - 5 until right.toInt() + 5) {
             g.stroke = BasicStroke(if (x % 5 == 0) 2.0f else 0.5f)
-            val a = transform(Point(x.toDouble(), top.toDouble()))
-            val b = transform(Point(x.toDouble(), bottom.toDouble()))
+            val a = transform(Point(x.toDouble(), top))
+            val b = transform(Point(x.toDouble(), bottom))
             g.drawLine(a.x.toInt(), a.y.toInt(), b.x.toInt(), b.y.toInt())
         }
 
         // horizontal lines
         for (y in bottom.toInt() - 5 until top.toInt() + 5) {
             g.stroke = BasicStroke(if (y % 5 == 0) 2.0f else 0.5f)
-            val a = transform(Point(left.toDouble(), y.toDouble()))
-            val b = transform(Point(right.toDouble(), y.toDouble()))
+            val a = transform(Point(left, y.toDouble()))
+            val b = transform(Point(right, y.toDouble()))
             g.drawLine(a.x.toInt(), a.y.toInt(), b.x.toInt(), b.y.toInt())
         }
 
         // the axes
-        g.stroke = BasicStroke(3.0f);
+        g.stroke = BasicStroke(3.0f)
         // x
         run {
             val a = transform(Point.ORIGIN)
-            val b = transform(Point(right.toDouble(), 0.0))
+            val b = transform(Point(right, 0.0))
             g.drawArrow(a.x.toInt(), a.y.toInt(), b.x.toInt(), b.y.toInt())
         }
         run {
             val a = transform(Point.ORIGIN)
-            val b = transform(Point(left.toDouble(), 0.0))
+            val b = transform(Point(left, 0.0))
             g.drawArrow(a.x.toInt(), a.y.toInt(), b.x.toInt(), b.y.toInt())
         }
 
         // y
         run {
             val a = transform(Point.ORIGIN)
-            val b = transform(Point(0.0, top.toDouble()))
+            val b = transform(Point(0.0, top))
             g.drawArrow(a.x.toInt(), a.y.toInt(), b.x.toInt(), b.y.toInt())
-        };
+        }
+        
         run {
             val a = transform(Point.ORIGIN)
-            val b = transform(Point(0.0, bottom.toDouble()))
+            val b = transform(Point(0.0, bottom))
             g.drawArrow(a.x.toInt(), a.y.toInt(), b.x.toInt(), b.y.toInt())
         }
 
+        // calculate rendering resolution
+        // aims at 200 segments all across the screen
+        val inc = (right - left) / 200.0
+
         g.stroke = BasicStroke(3.0f)
         var colorIndex = 0
-        functionList.forEach {
-            g.color = colors[colorIndex]
-            var x = left
-            while (x <= right) {
-                val a = transform(Point(x, it.calculate(x)))
-                x += 0.1
-                val b = transform(Point(x, it.calculate(x)))
-                g.drawLine(a.x.toInt(), a.y.toInt(), b.x.toInt(), b.y.toInt())
+        synchronized(functionList) {
+            functionList.forEach {
+                g.color = colors[colorIndex]
+                var x = left
+                while (x <= right) {
+                    val a = transform(Point(x, it.calculate(x)))
+                    x += inc
+                    val b = transform(Point(x, it.calculate(x)))
+                    g.drawLine(a.x.toInt(), a.y.toInt(), b.x.toInt(), b.y.toInt())
+                }
+                colorIndex++
             }
-            colorIndex++
         }
     }
 
@@ -211,7 +246,19 @@ class CanvasView(private val functionList: ArrayList<Function>) : Canvas() {
     }
 }
 
-private val colors: Array<Color> = arrayOf(Color.RED, Color.GREEN, Color.BLUE, Color.BLACK, Color.CYAN, Color.MAGENTA, Color.GRAY, Color.YELLOW)
+private val colors: Array<Color> =
+    arrayOf(
+        Color.RED,
+        Color.GREEN,
+        Color.BLUE,
+        Color.BLACK,
+        Color.CYAN,
+        Color.MAGENTA,
+        Color.GRAY,
+        Color.YELLOW,
+        Color.ORANGE,
+        Color.PINK
+    )
 
 private const val ARR_SIZE = 10
 
