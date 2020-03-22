@@ -2,19 +2,20 @@ package me.nanjingchj.desmos
 
 import org.mariuszgromada.math.mxparser.Function
 import java.awt.*
-import java.awt.event.*
+import java.awt.event.MouseEvent
+import java.awt.event.MouseListener
+import java.awt.event.MouseMotionListener
 import java.awt.geom.AffineTransform
 import javax.swing.*
 import kotlin.math.atan2
 import kotlin.math.sqrt
-import kotlin.reflect.jvm.reflect
 
 
 class Window : JFrame("Desmos") {
     private val canvas: CanvasView
     private val input = JPanel()
     private val txtInput = JTextField()
-    private val functionsList = ArrayList<Function>()
+    private val functions = ArrayList<Function>()
 
     init {
         defaultCloseOperation = WindowConstants.EXIT_ON_CLOSE
@@ -49,15 +50,14 @@ class Window : JFrame("Desmos") {
         c.weightx = 1.0
         c.weighty = 1.0
         c.fill = GridBagConstraints.BOTH
-        canvas = CanvasView(functionsList)
+        canvas = CanvasView(functions)
         pnl.add(canvas, c)
 
         canvas.initBufferStrategy()
         revalidate()
-    }
 
-    private fun textTyped() {
-
+        functions.add(Function("f(x) = x ^ 2"))
+        functions.add(Function("g(x) = sin(x)"))
     }
 }
 
@@ -191,8 +191,18 @@ class CanvasView(private val functionList: ArrayList<Function>) : Canvas() {
             g.drawArrow(a.x.toInt(), a.y.toInt(), b.x.toInt(), b.y.toInt())
         }
 
+        g.stroke = BasicStroke(3.0f)
+        var colorIndex = 0
         functionList.forEach {
-
+            g.color = colors[colorIndex]
+            var x = left
+            while (x <= right) {
+                val a = transform(Point(x, it.calculate(x)))
+                x += 0.1
+                val b = transform(Point(x, it.calculate(x)))
+                g.drawLine(a.x.toInt(), a.y.toInt(), b.x.toInt(), b.y.toInt())
+            }
+            colorIndex++
         }
     }
 
@@ -200,6 +210,8 @@ class CanvasView(private val functionList: ArrayList<Function>) : Canvas() {
         return Point((p.x - left) * width / (right - left), (top - p.y) * height / (top - bottom))
     }
 }
+
+private val colors: Array<Color> = arrayOf(Color.RED, Color.GREEN, Color.BLUE, Color.BLACK, Color.CYAN, Color.MAGENTA, Color.GRAY, Color.YELLOW)
 
 private const val ARR_SIZE = 10
 
