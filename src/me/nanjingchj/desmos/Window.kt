@@ -2,19 +2,18 @@ package me.nanjingchj.desmos
 
 import org.mariuszgromada.math.mxparser.Function
 import java.awt.*
-import java.awt.event.MouseEvent
-import java.awt.event.MouseListener
-import java.awt.event.MouseMotionListener
+import java.awt.event.*
 import java.awt.geom.AffineTransform
 import javax.swing.*
 import kotlin.math.atan2
+import kotlin.math.pow
 import kotlin.math.sqrt
 
 
 class Window : JFrame("Desmos") {
     private val canvas: CanvasView
     private val input = JPanel()
-    private val txtInput = JTextField()
+    private val txtInput = JTextArea()
     private val functions = ArrayList<Function>()
 
     init {
@@ -55,6 +54,27 @@ class Window : JFrame("Desmos") {
 
         canvas.initBufferStrategy()
         revalidate()
+
+        txtInput.addKeyListener(object : KeyListener {
+            override fun keyTyped(e: KeyEvent) {
+                try {
+                    val functionsAsString = txtInput.text.split("\n")
+                    val functionsNew = ArrayList<Function>(functionsAsString.size)
+                    functionsAsString.forEach {
+                        functionsNew.add(Function(it))
+                    }
+                    synchronized(functions) {
+                        functions.clear()
+                        functions.addAll(functionsNew)
+                    }
+                } catch (e: Exception) {
+                }
+            }
+
+            override fun keyPressed(e: KeyEvent) {}
+            override fun keyReleased(e: KeyEvent) {}
+        })
+
         synchronized(functions) {
             functions.add(Function("f(x) = x ^ 2"))
             functions.add(Function("g(x) = sin(x)"))
@@ -66,6 +86,10 @@ data class Point(val x: Double, val y: Double) {
     companion object {
         @JvmStatic
         val ORIGIN = Point(0.0, 0.0)
+    }
+
+    fun distanceTo(that: Point): Double {
+        return sqrt((that.x - this.x).pow(2) + (that.y - this.y).pow(2))
     }
 }
 
@@ -178,6 +202,9 @@ class CanvasView(private val functionList: ArrayList<Function>) : Canvas() {
 
         // vertical lines
         g.color = Color.BLACK
+
+        // TODO better scaling, draw the lines according to the current scale
+
         for (x in left.toInt() - 5 until right.toInt() + 5) {
             g.stroke = BasicStroke(if (x % 5 == 0) 2.0f else 0.5f)
             val a = transform(Point(x.toDouble(), top))
@@ -213,7 +240,7 @@ class CanvasView(private val functionList: ArrayList<Function>) : Canvas() {
             val b = transform(Point(0.0, top))
             g.drawArrow(a.x.toInt(), a.y.toInt(), b.x.toInt(), b.y.toInt())
         }
-        
+
         run {
             val a = transform(Point.ORIGIN)
             val b = transform(Point(0.0, bottom))
@@ -221,20 +248,29 @@ class CanvasView(private val functionList: ArrayList<Function>) : Canvas() {
         }
 
         // calculate rendering resolution
-        // aims at 200 segments all across the screen
-        val inc = (right - left) / 200.0
+        // aims at 1000 segments all across the screen
+        val inc = (right - left) / 1000.0
 
         g.stroke = BasicStroke(3.0f)
         var colorIndex = 0
         synchronized(functionList) {
             functionList.forEach {
+                if (colorIndex >= colors.size) {
+                    colorIndex = 0
+                }
                 g.color = colors[colorIndex]
                 var x = left
                 while (x <= right) {
-                    val a = transform(Point(x, it.calculate(x)))
+                    val a0 = Point(x, it.calculate(x))
+                    val a = transform(a0)
                     x += inc
-                    val b = transform(Point(x, it.calculate(x)))
-                    g.drawLine(a.x.toInt(), a.y.toInt(), b.x.toInt(), b.y.toInt())
+                    val b0 = Point(x, it.calculate(x))
+                    val b = transform(b0)
+                    if (a0.distanceTo(b0) > 100) {
+                        g.drawOval(a.x.toInt() - 1, a.y.toInt() - 1, 2, 2)
+                    } else {
+                        g.drawLine(a.x.toInt(), a.y.toInt(), b.x.toInt(), b.y.toInt())
+                    }
                 }
                 colorIndex++
             }
