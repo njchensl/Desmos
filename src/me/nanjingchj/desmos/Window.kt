@@ -95,7 +95,7 @@ data class Point(val x: Double, val y: Double) {
 
 data class Quadruple<T>(val a: T, val b: T, val c: T, val d: T)
 
-private const val zoomIncCoefficient = 0.1
+private const val zoomIncCoefficient = 0.05
 
 class CanvasView(private val functionList: ArrayList<Function>) : Canvas() {
     // project this whole range of points onto the graph
@@ -248,8 +248,8 @@ class CanvasView(private val functionList: ArrayList<Function>) : Canvas() {
         }
 
         // calculate rendering resolution
-        // aims at 1000 segments all across the screen
-        val inc = (right - left) / 1000.0
+        // aims at 2000 segments all across the screen
+        val inc = (right - left) / 2000.0
 
         g.stroke = BasicStroke(3.0f)
         var colorIndex = 0
@@ -261,12 +261,22 @@ class CanvasView(private val functionList: ArrayList<Function>) : Canvas() {
                 g.color = colors[colorIndex]
                 var x = left
                 while (x <= right) {
-                    val a0 = Point(x, it.calculate(x))
+                    val y1 = it.calculate(x)
+                    if (y1.isNaN()) {
+                        x += inc
+                        continue
+                    }
+                    val a0 = Point(x, y1)
                     val a = transform(a0)
                     x += inc
-                    val b0 = Point(x, it.calculate(x))
+                    val y2 = it.calculate(x)
+                    if (y2.isNaN()) {
+                        x += inc
+                        continue
+                    }
+                    val b0 = Point(x, y2)
                     val b = transform(b0)
-                    if (a0.distanceTo(b0) > 100) {
+                    if (a0.distanceTo(b0) > 30) {
                         g.drawOval(a.x.toInt() - 1, a.y.toInt() - 1, 2, 2)
                     } else {
                         g.drawLine(a.x.toInt(), a.y.toInt(), b.x.toInt(), b.y.toInt())
